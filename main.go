@@ -2,14 +2,13 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"sync/atomic"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/mhetem/Chirpy/internal/database"
 
 	_ "github.com/lib/pq"
@@ -20,66 +19,14 @@ import (
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries      *database.Queries
+	Platform       string
 }
 
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits.Add(1)
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
-	count := cfg.fileserverHits.Load()
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(fmt.Sprintf("<html>\n   <body>\n    <h1>Welcome, Chirpy Admin</h1>\n    <p>Chirpy has been visited %d times!</p>\n  </body>\n</html>", count)))
-}
-
-func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
-	cfg.fileserverHits.Store(0)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(200)
-	w.Write([]byte("Hits reset"))
-}
-
-func (cfg *apiConfig) handlerValidate(w http.ResponseWriter, r *http.Request) {
-	decoder := json.NewDecoder(r.Body)
-	params := jResponse{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, 500, "Error decoding")
-		return
-	}
-	if len(params.Body) > 140 {
-		respondWithError(w, 400, "Chirp is too long")
-		return
-	}
-	cleaned_body := removeProfane(params.Body)
-	type returnVals struct {
-		CleanedBody string `json:"cleaned_body"`
-	}
-	resp := returnVals{
-		CleanedBody: cleaned_body,
-	}
-	respondWithJSON(w, 200, resp)
-
-}
-
-func removeProfane(body string) string {
-	words := strings.Split((body), " ")
-	for i, word := range words {
-		if strings.ToLower(word) == "kerfuffle" {
-			words[i] = "****"
-		}
-		if strings.ToLower(word) == "sharbert" {
-			words[i] = "****"
-		}
-		if strings.ToLower(word) == "fornax" {
-			words[i] = "****"
-		}
-	}
-	return strings.Join(words, " ")
-
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
 }
 
 func main() {
@@ -94,9 +41,11 @@ func main() {
 	}
 
 	dbQueries := database.New(db)
+	platform := os.Getenv("PLATFORM")
 
 	cfg := apiConfig{
 		dbQueries: dbQueries,
+		Platform:  platform,
 	}
 	mux := http.NewServeMux()
 
@@ -112,7 +61,11 @@ func main() {
 
 	mux.HandleFunc("GET /admin/metrics", cfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", cfg.handlerReset)
-	mux.HandleFunc("POST /api/validate_chirp", cfg.handlerValidate)
+	mux.HandleFunc("POST /api/chirps", cfg.handlerChirps)
+	mux.HandleFunc("POST /api/users", cfg.handlerCreateUser)
+	mux.HandleFunc("GET /api/chirps", cfg.handlerGetChirps)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", cfg.handlerGetSingleChirp)
+	mux.HandleFunc("POST /api/login", cfg.handlerLogin)
 
 	serv := http.Server{
 		Addr:    ":8080",

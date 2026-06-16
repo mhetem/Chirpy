@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type jResponse struct {
@@ -14,8 +17,17 @@ type jError struct {
 	Error string `json:"error"`
 }
 
-type jValid struct {
-	Valid bool `json:"valid"`
+type paramChirp struct {
+	Body   string    `json:"body"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+type jChirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
