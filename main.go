@@ -21,13 +21,15 @@ type apiConfig struct {
 	dbQueries      *database.Queries
 	Platform       string
 	Secret         string
+	PolkaKey       string
 }
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 func main() {
@@ -44,11 +46,13 @@ func main() {
 	dbQueries := database.New(db)
 	platform := os.Getenv("PLATFORM")
 	secret := os.Getenv("SECRET")
+	pk := os.Getenv("POLKA_KEY")
 
 	cfg := apiConfig{
 		dbQueries: dbQueries,
 		Platform:  platform,
 		Secret:    secret,
+		PolkaKey:  pk,
 	}
 	mux := http.NewServeMux()
 
@@ -73,6 +77,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", cfg.handlerLogin)
 	mux.HandleFunc("POST /api/refresh", cfg.handlerRefresh)
 	mux.HandleFunc("POST /api/revoke", cfg.handlerRevoke)
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.handlerUpdateChirpyRed)
 
 	serv := http.Server{
 		Addr:    ":8080",
